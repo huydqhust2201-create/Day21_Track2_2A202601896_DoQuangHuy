@@ -2,6 +2,13 @@
 
 **Repo:** https://github.com/huydqhust2201-create/Day21_Track2_2A202601896_DoQuangHuy
 
+**Ảnh chụp màn hình bằng chứng:** xem thư mục [`screenshots/`](screenshots/)
+1. [`01-mlflow-experiments.png`](screenshots/01-mlflow-experiments.png) — MLflow UI, 7 run với f1_score/accuracy khác nhau
+2. [`02-github-actions-4-jobs-green.png`](screenshots/02-github-actions-4-jobs-green.png) — 4 job Actions đều xanh
+3. [`03-endpoint-curl-results.png`](screenshots/03-endpoint-curl-results.png) — curl `/healthz` và `/score` trên EC2
+4. [`04-azure-storage-container.png`](screenshots/04-azure-storage-container.png) — container `labstore` với `dvc/` và `artifacts/`
+5. [`05-quality-gate-blocked.png`](screenshots/05-quality-gate-blocked.png) — Quality Gate chặn thật, Release bị skip
+
 ## 1. Bộ siêu tham số đã chọn và lý do
 
 Ba thí nghiệm chạy trên `train_batch1.csv` (22361 mẫu), đánh giá trên `holdout.csv` (500 mẫu), ghi lại trong MLflow:
