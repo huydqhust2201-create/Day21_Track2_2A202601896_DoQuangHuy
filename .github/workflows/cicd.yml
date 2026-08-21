@@ -1,0 +1,107 @@
+name: Income Model CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/**.dvc'
+      - 'src/**.py'
+      - 'params.yaml'
+  workflow_dispatch:
+
+jobs:
+  # JOB 1: Chay unit tests tren du lieu ao (khong can cloud storage)
+  unit-test:
+    name: Unit Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run tests
+        run: pytest tests/ -v
+
+  # JOB 2: Huan luyen tren du lieu that, upload mo hinh len cloud storage
+  train:
+    name: Train
+    needs: unit-test
+    runs-on: ubuntu-latest
+    outputs:
+      f1: ${{ steps.read_report.outputs.f1 }}
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/sa-key.json
+      ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install "dvc[gs]"
+      - name: Configure cloud credentials
+        run: echo '${{ secrets.STORAGE_CREDENTIALS }}' > sa-key.json
+      - name: Pull data with DVC
+        run: dvc pull data/train_batch1.csv.dvc data/holdout.csv.dvc
+      - name: Train model
+        run: python src/train.py
+      - name: Read F1 from report
+        id: read_report
+        run: |
+          F1=$(python -c "import json; d=json.load(open('outputs/report.json')); print(d['f1_score'])")
+          echo "f1=$F1" >> $GITHUB_OUTPUT
+      - name: Upload model to Cloud Storage
+        run: |
+          python - <<'PYEOF'
+          import os
+          from google.cloud import storage
+
+          client = storage.Client()
+          bucket = client.bucket(os.environ["ARTIFACT_BUCKET"])
+          blob = bucket.blob("artifacts/current/model.joblib")
+          blob.upload_from_filename("models/model.joblib")
+          print("Da upload models/model.joblib -> artifacts/current/model.joblib")
+          PYEOF
+      - name: Upload run artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-report
+          path: |
+            outputs/report.json
+            models/model.joblib
+
+  # JOB 3: Chot chan chat luong - chan trien khai neu F1 duoi nguong
+  quality-gate:
+    name: Quality Gate
+    needs: train
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check F1 threshold
+        run: |
+          python - <<'PYEOF'
+          f1 = float("${{ needs.train.outputs.f1 }}")
+          if f1 < 0.65:
+              raise SystemExit(f"FAILED: f1_score {f1:.4f} < 0.65. Huy trien khai.")
+          print(f"PASSED: f1_score {f1:.4f} >= 0.65, dang trien khai model.")
+          PYEOF
+
+  # JOB 4: Trien khai len VM qua SSH
+  release:
+    name: Release
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy to VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            sudo systemctl restart income-api
+            sleep 5
+            curl -sf http://localhost:8080/healthz && echo "Health check passed." || exit 1
