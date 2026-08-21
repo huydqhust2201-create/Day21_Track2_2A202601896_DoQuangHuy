@@ -1,24 +1,25 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from google.cloud import storage  # thay bang SDK cua provider da chon (boto3 / azure-storage-blob)
+from azure.storage.blob import BlobServiceClient
 import joblib
 import os
 
 app = FastAPI()
 
-ARTIFACT_BUCKET = os.environ["ARTIFACT_BUCKET"]  # duoc dat trong systemd service
+STORAGE_CONNECTION_STRING = os.environ["AZURE_STORAGE_CONNECTION_STRING"]  # dat trong systemd service
+ARTIFACT_CONTAINER = os.environ["ARTIFACT_CONTAINER"]  # dat trong systemd service
 MODEL_KEY = "artifacts/current/model.joblib"
 MODEL_PATH = os.path.expanduser("~/models/model.joblib")
 
 
 def download_model():
-    """Tai model.joblib tu cloud storage ve may khi server khoi dong."""
+    """Tai model.joblib tu Azure Blob Storage ve may khi server khoi dong."""
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-    client = storage.Client()
-    bucket = client.bucket(ARTIFACT_BUCKET)
-    blob = bucket.blob(MODEL_KEY)
-    blob.download_to_filename(MODEL_PATH)
-    print(f"Da tai model tu gs://{ARTIFACT_BUCKET}/{MODEL_KEY} ve {MODEL_PATH}")
+    client = BlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING)
+    blob_client = client.get_blob_client(container=ARTIFACT_CONTAINER, blob=MODEL_KEY)
+    with open(MODEL_PATH, "wb") as f:
+        f.write(blob_client.download_blob().readall())
+    print(f"Da tai model tu {ARTIFACT_CONTAINER}/{MODEL_KEY} ve {MODEL_PATH}")
 
 
 download_model()

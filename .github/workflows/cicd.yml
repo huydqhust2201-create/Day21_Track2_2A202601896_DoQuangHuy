@@ -32,8 +32,8 @@ jobs:
     outputs:
       f1: ${{ steps.read_report.outputs.f1 }}
     env:
-      GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/sa-key.json
-      ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_BUCKET }}
+      AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+      ARTIFACT_CONTAINER: ${{ secrets.ARTIFACT_CONTAINER }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -42,9 +42,9 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install "dvc[gs]"
-      - name: Configure cloud credentials
-        run: echo '${{ secrets.STORAGE_CREDENTIALS }}' > sa-key.json
+          pip install "dvc[azure]"
+      - name: Configure DVC remote credentials
+        run: dvc remote modify --local labstore connection_string "$AZURE_STORAGE_CONNECTION_STRING"
       - name: Pull data with DVC
         run: dvc pull data/train_batch1.csv.dvc data/holdout.csv.dvc
       - name: Train model
@@ -54,16 +54,19 @@ jobs:
         run: |
           F1=$(python -c "import json; d=json.load(open('outputs/report.json')); print(d['f1_score'])")
           echo "f1=$F1" >> $GITHUB_OUTPUT
-      - name: Upload model to Cloud Storage
+      - name: Upload model to Azure Blob Storage
         run: |
           python - <<'PYEOF'
           import os
-          from google.cloud import storage
+          from azure.storage.blob import BlobServiceClient
 
-          client = storage.Client()
-          bucket = client.bucket(os.environ["ARTIFACT_BUCKET"])
-          blob = bucket.blob("artifacts/current/model.joblib")
-          blob.upload_from_filename("models/model.joblib")
+          client = BlobServiceClient.from_connection_string(os.environ["AZURE_STORAGE_CONNECTION_STRING"])
+          blob_client = client.get_blob_client(
+              container=os.environ["ARTIFACT_CONTAINER"],
+              blob="artifacts/current/model.joblib",
+          )
+          with open("models/model.joblib", "rb") as f:
+              blob_client.upload_blob(f, overwrite=True)
           print("Da upload models/model.joblib -> artifacts/current/model.joblib")
           PYEOF
       - name: Upload run artifacts
