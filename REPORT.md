@@ -12,7 +12,7 @@ Ba thí nghiệm chạy trên `train_batch1.csv` (22361 mẫu), đánh giá trê
 | 50 | 0.05 | 2 | **0.6337** (< 0.65) | 0.8520 |
 | **200** | **0.1** | **5** | **0.7574** | 0.8860 |
 
-Chọn bộ **n_estimators=200, learning_rate=0.1, max_depth=5** vì cho F1 cao nhất và vượt ngưỡng 0.65. Bộ tham số yếu (50/0.05/2) được giữ lại làm bằng chứng quality gate hoạt động: job **Quality Gate** đã thực sự FAIL với bộ này khi thử nghiệm cục bộ (F1=0.6337 < 0.65).
+Chọn bộ **n_estimators=200, learning_rate=0.1, max_depth=5** vì cho F1 cao nhất và vượt ngưỡng 0.65.
 
 ## 2. Vì sao ngưỡng chất lượng đặt trên F1, không phải accuracy
 
@@ -38,6 +38,7 @@ F1 chỉ tăng nhẹ **+0.0045**. `train_batch2.csv` là nửa còn lại của 
 ## Bằng chứng đã có
 
 - MLflow UI: 3 lần chạy với siêu tham số và chỉ số khác nhau.
-- Tab Actions: Unit Test → Train → Quality Gate xanh ở cả 2 lần chạy (lần đầu và lần kích hoạt bởi commit dữ liệu `b3011d4`).
+- Tab Actions: Unit Test → Train → Quality Gate xanh ở nhiều lần chạy (lần đầu, lần kích hoạt bởi commit dữ liệu `b3011d4`, và lần khôi phục tham số tốt `4ab4b63`).
+- **Quality gate thực sự chặn triển khai**: run [`32484353299`](https://github.com/huydqhust2201-create/Day21_Track2_2A202601896_DoQuangHuy/actions/runs/32484353299) dùng tham số cố tình yếu (n_estimators=10, learning_rate=0.01, max_depth=1) cho **f1_score=0.0000, accuracy=0.7420** — đúng kịch bản "mô hình đoán bừa" ở mục 4.2: accuracy trông cao nhưng F1 bằng 0. Job Quality Gate FAIL, job Release **bị skip hoàn toàn** (không chạy), không có thao tác tay nào can thiệp.
 - Cloud Storage: dữ liệu dưới prefix `dvc/`, model tại `artifacts/current/model.joblib` trong container `labstore`.
-- Job Release: đang chờ VM (đã xác nhận nguyên nhân, đang xử lý).
+- Job Release: đang chờ VM (đã xác định nguyên nhân là giới hạn xác minh tài khoản mới của Azure, đang chờ xử lý).
